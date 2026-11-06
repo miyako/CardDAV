@@ -45,7 +45,8 @@ operations and process transport without requiring account credentials.
 
 Native Intel 4D, native Windows x86_64 CLI/4D and DLL dependency checks,
 live authorized iCloud discovery/CRUD, published Dependency Manager
-installation, and optional signing/notarization require separate evidence.
+installation, and signing/notarization require separate evidence. Publish
+requires signing/notarization; local and CI inspection can remain unsigned.
 Windows ARM64 is unsupported. Mock success does not establish server-specific
 live behavior; no live account or previously authorized CalDAV Keychain item
 is used for this component.
