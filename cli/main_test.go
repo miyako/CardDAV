@@ -56,7 +56,8 @@ func TestInputProtocol(t *testing.T) {
 
 func TestCLIStreamsAndDeadline(t *testing.T) {
 	var out, diagnostic bytes.Buffer
-	if code := run(context.Background(), []string{"--version"}, strings.NewReader("ignored"), &out, &diagnostic); code != 0 || out.String() != `{"protocol":1,"version":"0.1.0"}`+"\n" || diagnostic.Len() != 0 {
+	expected := `{"protocol":1,"version":"` + version + `"}` + "\n"
+	if code := run(context.Background(), []string{"--version"}, strings.NewReader("ignored"), &out, &diagnostic); code != 0 || out.String() != expected || diagnostic.Len() != 0 {
 		t.Fatal(code, out.String(), diagnostic.String())
 	}
 	out.Reset()

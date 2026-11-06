@@ -446,6 +446,22 @@ class BumpReleaseTests(unittest.TestCase):
                     finally:
                         fixture.doCleanups()
 
+    @unittest.skipIf(os.environ.get("TEST_CLI_LANGUAGE") == "none",
+                     "CLI toolchains explicitly disabled")
+    def test_bumped_version_runs_native_go_unit_tests(self):
+        self.assertIsNotNone(shutil.which("go"), "Go toolchain required")
+        bump_release.apply(self.root, "1.2.3")
+        environment = os.environ.copy()
+        environment.pop("GOOS", None)
+        environment.pop("GOARCH", None)
+        environment.update(CGO_ENABLED="0", GOTOOLCHAIN="local")
+        result = subprocess.run(
+            ["go", "test", "-mod=readonly", "-count=1", "./..."],
+            cwd=self.root / "cli", env=environment,
+            capture_output=True, text=True, timeout=180,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
