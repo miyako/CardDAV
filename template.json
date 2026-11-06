@@ -6,6 +6,6 @@
   "cli": "carddav",
   "language": "go",
   "feature": "CardDAV address-book discovery and conditional lossless contact CRUD",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "feature_class": "Client"
 }

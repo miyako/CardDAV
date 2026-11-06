@@ -49,7 +49,7 @@ class GoCLI(unittest.TestCase):
     def test_version(self):
         result = self.invoke(["--version"])
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(result.stdout, b'{"protocol":1,"version":"0.1.0"}\n')
+        self.assertEqual(result.stdout, b'{"protocol":1,"version":"0.1.1"}\n')
         self.assertEqual(result.stderr, b"")
 
     def test_native_contract(self):
