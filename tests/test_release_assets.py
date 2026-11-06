@@ -2,6 +2,7 @@
 import copy
 import json
 from pathlib import Path
+import shlex
 import sys
 import unittest
 from unittest.mock import patch
@@ -223,19 +224,33 @@ class ReleaseAssetsTests(unittest.TestCase):
         self.assertNotIn("shell", run.call_args.kwargs)
         self.assertNotIn("*.zip", arguments)
 
-    def test_release_secret_gate_and_manual_escalation_are_explicit(self):
+    def test_publish_always_requires_signing_without_dispatch_override(self):
         workflow = (ROOT / ".github/workflows/publish.yml").read_text()
-        unsigned = workflow.split("name: Build and accept unsigned component without Apple secrets")[1].split(
-            "name: Sign, notarize, staple")[0]
-        self.assertIn("apple_signing == 'false'", unsigned)
-        self.assertNotIn("secrets.", unsigned)
+        dispatch = workflow.split("\npermissions:", 1)[0]
+        self.assertNotIn("require_apple_signing", dispatch)
+        self.assertNotIn("inputs.require_apple_signing", workflow)
+        self.assertNotIn("Build and accept unsigned component", workflow)
+        self.assertIn(
+            "run: python scripts/sign_release.py policy --root . --require-apple-signing",
+            workflow)
         signed = workflow.split("name: Sign, notarize, staple")[1].split(
             "uses: actions/upload-artifact")[0]
-        self.assertIn("apple_signing == 'true'", signed)
+        self.assertNotIn("if:", signed)
         self.assertEqual(signed.count("secrets."), 7)
+        self.assertEqual(workflow.count("secrets."), 7)
         self.assertIn("--require-apple-signing", signed)
-        self.assertIn("require_apple_signing:", workflow)
-        self.assertIn("scripts/release_assets.py", workflow)
+        publication = workflow.split("name: Create the tag and release only after final asset validation")[1]
+        self.assertIn("--require-apple-signing --create-tag --publish", publication)
+        self.assertNotIn("APPLE_SIGNING", publication)
+        self.assertNotIn("if ", publication)
+        lines = publication.split("run: >-\n", 1)[1].splitlines()
+        self.assertEqual(len({len(line) - len(line.lstrip()) for line in lines}), 1)
+        command = " ".join(line.strip() for line in lines)
+        self.assertEqual(shlex.split(command), [
+            "python", "scripts/release_assets.py", "--repository", "$GH_REPO",
+            "--tag", "$RELEASE_TAG", "--sha", "$RELEASE_SHA",
+            "--require-apple-signing", "--create-tag", "--publish",
+        ])
         self.assertNotIn("continue-on-error", workflow)
 
     def test_new_tag_is_created_only_after_assets_pass_and_before_release(self):

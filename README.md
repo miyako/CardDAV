@@ -141,9 +141,10 @@ acceptance requires `FOURD_ENABLED=true`; CLI-only green is not 4D acceptance.
 Manual Publish on main plans patch/minor/major, synchronizes version surfaces,
 builds the exact revision and verifies compiler, package, final compiled-host
 and downloaded asset proofs before creating a tag/release. Tag-push publication
-is not enabled. Signing is opt-in via `release-policy.json`; unsigned local
-acceptance needs no signing secrets. See [AGENTS.md](AGENTS.md) for unchanged
-pipeline gates and tool pins.
+is not enabled. Publish always requires Apple signing, notarization and final
+signed-package verification; there is no signing checkbox or unsigned publication
+path. Local and CI inspection remain unsigned-capable and need no signing
+secrets. See [AGENTS.md](AGENTS.md) for pipeline gates and tool pins.
 
 No push, PR, merge, tag, release, signing provisioning or publication is part of
 this local implementation.

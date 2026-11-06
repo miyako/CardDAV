@@ -592,9 +592,10 @@ CI handles branch pushes, PRs and dispatch, never tags; the bot's `GITHUB_TOKEN`
 commit does not recursively trigger CI. Publish explicitly calls reusable CI
 with `release_call:true` to avoid a second optional compiled inspection.
 The same input commit must bind all native manifests and acceptance evidence.
-Signing policy is read at the version commit SHA. Manual
-`require_apple_signing` can escalate an unsigned version but cannot downgrade
-a policy-required signed version.
+Signing policy is validated at the version commit SHA. CardDAV Publish always
+passes `--require-apple-signing` to policy validation, signed acceptance and final
+asset publication. There is no signing dispatch input or unsigned publication
+branch; local and CI inspection remain unsigned-capable.
 Only after compilation and exact final-host success does `release_assets.py`
 verify downloaded ZIP/DMG/proof bytes, accepted hashes/sizes, revision, native
 manifests and full source/final-host contracts. It then verifies main ancestry,
@@ -677,8 +678,8 @@ resources, compile fresh, and load the **exact final ZIP's** unpacked component.
 Report unsupported/unavailable checks as `not_run`; local success remains
 `release_ready:false`. Approved publication additionally requires a main-only
 version commit, all required native artifact/tests, hosted 4D opt-in and the final
-package-host gate. Signing is optional by default; a listed version or explicit signed dispatch
-requires every signing/notarization gate to pass before tag creation/publication.
+package-host gate. CardDAV Publish requires every signing/notarization gate to
+pass before tag creation/publication, regardless of version-policy entries.
 
 The final handoff must identify the repository/namespace/class/CLI/language,
 revision and input provenance, exact commands/results, tool versions, stable ZIP
@@ -714,7 +715,7 @@ cross-build or optional skipped workflow as passed.
 | Tool download/checksum/config failure | Check `package.json.tool` or complete overrides, official fixed URL and independently approved SHA256; do not fall back to `latest`, bypass the hash or redistribute vendor tools. |
 | Final host unfinished/failed | Stop and preserve status/phase/errors. A previous ZIP, successful compile or six completed cases cannot approve this run. |
 
-## 8. Icons, licensing and optional signing
+## 8. Icons, licensing and release signing
 
 Edit original `assets/icon-source.svg` within the supported rectangle/polygon
 renderer; regenerate **both** Resources icons. `logo.png` is real RGBA PNG and
@@ -750,14 +751,15 @@ existing `.4dbase` layout without introducing an application `Contents/` tree.
 `release-policy.json` is independent of template identity and is preserved by
 initialization. It defaults to
 `{"schema":1,"apple_notarized_versions":[]}`. List exact component versions
-without `v` to require signed releases; commit the policy before running Publish
-for that next version. A missing policy or unlisted version means unsigned, malformed
-policy fails closed. Manual release `require_apple_signing` and the helper's
-`--require-apple-signing` can only escalate, never downgrade policy.
+without `v` to require signing when invoking helpers directly. CardDAV Publish
+always supplies the helper's `--require-apple-signing` flag, including for missing
+or unlisted policies; malformed policy still fails closed. There is no manual
+signing override input, and helper flags can only escalate, never downgrade policy.
 `scripts/sign_release.py policy --root .` emits `apple_signing` without accessing
-secrets; the workflow passes credentials only to the policy-true stage.
+secrets; Publish passes credentials only to its required signing step.
 Merely registering secrets does not change policy, and no secret below is
-required by the free local compiler, unsigned CI inspection or unsigned release.
+required by the free local compiler or unsigned CI inspection. Unsigned
+publication is not supported by CardDAV Publish.
 
 The signed release runs the same verified native assembly, source-host,
 compilation and deterministic unsigned packaging pipeline, then tests the

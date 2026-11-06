@@ -72,10 +72,10 @@ or packaging; do not turn an SDK requirement into a component resource.
    is **NOT release ready**. Do not publish or add credentials without approval.
    Unsigned free tool4d local compilation needs no license/signing secrets.
    Manual initialized CI with `FOURD_ENABLED=true` retains an accepted compiled
-   ZIP and adjacent evidence without publishing. Release signing is implemented:
-   `release-policy.json.apple_notarized_versions` defaults to unsigned; a listed
-   version or manual `require_apple_signing` opts in. Only that branch receives
-   the seven secrets, signs an isolated copy, notarizes/staples its DMG, repacks
+   ZIP and adjacent evidence without publishing. CardDAV Publish always requires
+   Apple signing regardless of version-policy entries and has no signing dispatch
+   input. Only the signing step receives the seven secrets, signs an isolated
+   copy, notarizes/staples its DMG, repacks
    the ZIP from the final mounted DMG and reruns exact final ZIP compiled-host
    acceptance. Missing credentials or signing errors never downgrade to unsigned.
    Keep exactly CI and Publish workflows. Manual Publish on main accepts

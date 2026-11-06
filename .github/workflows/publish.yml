@@ -8,11 +8,6 @@ on:
         type: choice
         options: [patch, minor, major]
         default: patch
-      require_apple_signing:
-        description: Require Apple signing even when the version policy is unsigned
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -29,7 +24,6 @@ jobs:
     outputs:
       source_sha: ${{ steps.commit.outputs.sha }}
       release_tag: ${{ steps.version.outputs.tag }}
-      apple_signing: ${{ steps.signing_policy.outputs.apple_signing }}
     steps:
       - name: Require manual publication from main
         if: github.ref != 'refs/heads/main'
@@ -62,17 +56,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: python scripts/release_ref.py available --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG"
-      - name: Resolve version signing policy without accessing secrets
-        id: signing_policy
-        env:
-          REQUIRE_APPLE_SIGNING: ${{ inputs.require_apple_signing }}
-        shell: python
-        run: |
-          import os, subprocess, sys
-          arguments = [sys.executable, "scripts/sign_release.py", "policy", "--root", "."]
-          if os.environ["REQUIRE_APPLE_SIGNING"] == "true":
-              arguments.append("--require-apple-signing")
-          subprocess.run(arguments, check=True)
+      - name: Validate required Apple signing policy without accessing secrets
+        run: python scripts/sign_release.py policy --root . --require-apple-signing
       - name: Commit version updates to main and record the exact build SHA
         id: commit
         env:
@@ -124,13 +109,7 @@ jobs:
           path: build/windows-x64
       - name: Download SHA-256-verified tool4D
         run: python scripts/ci_config.py download-tool4d
-      - name: Build and accept unsigned component without Apple secrets
-        if: needs.version.outputs.apple_signing == 'false'
-        run: >-
-          python scripts/accept_hosted.py --repository "$GITHUB_REPOSITORY"
-          --tool4d .tools/tool4d.app/Contents/MacOS/tool4d --tag "$RELEASE_TAG"
       - name: Sign, notarize, staple and accept the exact final ZIP
-        if: needs.version.outputs.apple_signing == 'true'
         env:
           APPLE_DEVELOPER_ID_CERTIFICATE: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE }}
           APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
@@ -191,9 +170,6 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
           RELEASE_SHA: ${{ needs.version.outputs.source_sha }}
-          APPLE_SIGNING: ${{ needs.version.outputs.apple_signing }}
-        run: |
-          signing=()
-          if [ "$APPLE_SIGNING" = "true" ]; then signing+=(--require-apple-signing); fi
-          python scripts/release_assets.py --repository "$GH_REPO" --tag "$RELEASE_TAG" \
-            --sha "$RELEASE_SHA" "${signing[@]}" --create-tag --publish
+        run: >-
+          python scripts/release_assets.py --repository "$GH_REPO" --tag "$RELEASE_TAG"
+          --sha "$RELEASE_SHA" --require-apple-signing --create-tag --publish
