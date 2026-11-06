@@ -6,7 +6,7 @@ No live-account access is required by its tests.
 
 ## Process and framing
 
-* `carddav --version` emits exactly `{"protocol":1,"version":"0.1.1"}` plus LF,
+* `carddav --version` emits exactly `{"protocol":1,"version":"0.1.2"}` plus LF,
   exits 0, and does not read stdin.
 * `carddav request` reads **one** UTF-8 JSON object through EOF on stdin.
   Close stdin after writing it. Whitespace before/after that object is allowed;

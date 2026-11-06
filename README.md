@@ -83,7 +83,7 @@ argv, shell scripts, reports or logs.
 
 | Invocation | Response |
 | --- | --- |
-| `carddav --version` | `{"protocol":1,"version":"0.1.1"}` followed by LF |
+| `carddav --version` | `{"protocol":1,"version":"0.1.2"}` followed by LF |
 | `carddav request` | `{"protocol":1,"result":{...}}` on stdout; structured errors on stderr |
 
 ```sh

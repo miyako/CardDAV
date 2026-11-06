@@ -49,7 +49,7 @@ version response into `value:{version:Text}`. Raw stdout retains the full JSON r
 Each invocation launches `carddav request`, writes one UTF-8 JSON object to
 stdin, closes stdin (EOF), and waits with the generic 30-second process timeout.
 Version uses `carddav --version` without stdin.
-Its exact current stdout is `{"protocol":1,"version":"0.1.1"}` followed by LF.
+Its exact current stdout is `{"protocol":1,"version":"0.1.2"}` followed by LF.
 The version follows the configured component/CLI release; request successes
 continue to use the nested `result` wrapper.
 

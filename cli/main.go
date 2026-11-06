@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 )
 
-const version = "0.1.1"
+const version = "0.1.2"
 const maxInput = 4 << 20
 const maxCard = 1 << 20
 const maxResponse = 16 << 20
