@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "args": ["--version"],
+      "exitCode": 0,
+      "stdout": {"protocol": 1, "version": "$VERSION"},
+      "stderr": ""
+    },
+    {
+      "args": ["request"],
+      "stdin": "{\"protocol\":1,\"operation\":\"build\",\"version\":\"3.0\",\"contact\":{\"uid\":\"test-uid\",\"formattedName\":\"世界 café\"}}\n",
+      "exitCode": 0,
+      "stdout": {"protocol": 1, "result": {"vcard": "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:test-uid\r\nFN:世界 café\r\nN:;;;;\r\nEND:VCARD\r\n", "uid": "test-uid", "version": "3.0"}},
+      "stderr": ""
+    },
+    {
+      "args": ["request"],
+      "stdin": "{\"protocol\":1,\"operation\":\"build\",\"contact\":{}}\n",
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": {"protocol": 1, "error": {"code": "invalid_request", "message": "invalid request"}}
+    },
+    {
+      "args": ["unknown"],
+      "exitCode": 2,
+      "stdout": "",
+      "stderr": {"protocol": 1, "error": {"code": "invalid_arguments", "message": "expected request or --version"}}
+    }
+  ]
+}
