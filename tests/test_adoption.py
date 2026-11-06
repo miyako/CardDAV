@@ -23,20 +23,15 @@ from build_cli import smoke_test
 from doctor import doctor
 import accept_local
 import ci_config
+from test_initializer import template_fixture
 
 
 class AdoptionTests(unittest.TestCase):
     def setUp(self):
-        if json.loads((ROOT / "template.json").read_text())["initialized"]:
-            self.skipTest("adoption fixtures need original starters")
-        self.temporary = tempfile.TemporaryDirectory(prefix="adoption 日本語 ")
+        self.temporary = tempfile.TemporaryDirectory(prefix=".adoption 日本語 ", dir=ROOT)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        for name in ("component", "cli-starters", "tests/host"):
-            shutil.copytree(ROOT / name, self.root / name)
-        for name in ("template.json", "package.json", "README.md", "LICENSE", "AGENTS.md",
-                     ".gitattributes", "release-policy.json"):
-            shutil.copy2(ROOT / name, self.root / name)
+        template_fixture(self.root)
         initialize(self.root, "UuidTest", "UuidTest", "uuid-test", "go", "Feature decisions remain required")
 
     def test_case_identity_rename_idempotence_and_no_token_rewrite(self):
@@ -119,6 +114,35 @@ class AdoptionTests(unittest.TestCase):
         with patch("build_cli.subprocess.run", return_value=subprocess.CompletedProcess([], 0, b"", b"")):
             with self.assertRaisesRegex(ValueError, "contract failed"):
                 smoke_test(self.root / "binary", "0.1.0", contract)
+
+    def test_cli_contract_encodes_utf8_stdin_and_defaults_to_empty_input(self):
+        contract = self.root / "stdin-contract.json"
+        request = '{"protocol":1,"operation":"parse","vcard":"日本語 café 😀 \\"quoted\\""}\n'
+        contract.write_text(json.dumps({"schema": 1, "cases": [
+            {"args": ["request"], "stdin": request, "exitCode": 0, "stdout": "value\n", "stderr": ""},
+            {"args": ["unknown"], "exitCode": 2, "stdout": "", "stderr": "invalid\n"}]}))
+        executable = self.root / "binary path 日本語"
+        with patch("build_cli.subprocess.run", side_effect=[
+                subprocess.CompletedProcess([], 0, b"value\n", b""),
+                subprocess.CompletedProcess([], 2, b"", b"invalid\n")]) as run:
+            smoke_test(executable, "1.2.3", contract, prefix=("arch", "-arm64"))
+        self.assertEqual(run.call_args_list[0].args, (["arch", "-arm64", str(executable), "request"],))
+        self.assertEqual(run.call_args_list[0].kwargs,
+                         {"input": request.encode("utf-8"), "capture_output": True, "timeout": 30})
+        self.assertEqual(run.call_args_list[1].args, (["arch", "-arm64", str(executable), "unknown"],))
+        self.assertEqual(run.call_args_list[1].kwargs,
+                         {"input": b"", "capture_output": True, "timeout": 30})
+
+    def test_cli_contract_rejects_nontext_stdin_before_launch(self):
+        contract = self.root / "invalid-stdin-contract.json"
+        for value in (None, False, True, 0, 1, 1.5, [], {}, {"password": "private"}):
+            contract.write_text(json.dumps({"schema": 1, "cases": [
+                {"args": ["request"], "stdin": value, "exitCode": 0, "stdout": "value\n", "stderr": ""},
+                {"args": ["unknown"], "exitCode": 2, "stdout": "", "stderr": "invalid\n"}]}))
+            with self.subTest(stdin=value), patch("build_cli.subprocess.run") as run:
+                with self.assertRaisesRegex(ValueError, "CLI contract stdin must be Text"):
+                    smoke_test(self.root / "binary", "1.2.3", contract)
+                run.assert_not_called()
 
     def test_downloader_failure_and_nonvendor_url(self):
         with self.assertRaises(ValueError):
@@ -215,17 +239,28 @@ class AdoptionTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("TOOL4D_INTEGRATION"), "set TOOL4D_INTEGRATION to run real macOS ARM64 acceptance")
     def test_real_initialized_renamed_source_and_compiled_host(self):
         tool = Path(os.environ["TOOL4D_INTEGRATION"]).resolve()
-        for name in ("scripts", "tooling", "assets", "tests", ".github"):
+        for path in self.root.iterdir():
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        for name in ("scripts", "tooling", "assets", "tests", ".github", "component", "cli"):
             shutil.copytree(ROOT / name, self.root / name, dirs_exist_ok=True,
-                            ignore=shutil.ignore_patterns("__pycache__", ".cli-test*",
-                                                          *(("host",) if name == "tests" else ())))
+                            ignore=shutil.ignore_patterns("__pycache__", ".cli-test*", "DerivedData",
+                                                          "Libraries", "bin"))
+        for name in ("template.json", "package.json", "README.md", "LICENSE",
+                     "AGENTS.md", ".gitattributes", "release-policy.json"):
+            shutil.copy2(ROOT / name, self.root / name)
+        config = ci_config.load_config(self.root, initialized=True)
+        repository = config["repository"]
+        feature = config.get("feature_class", "Greeting")
         rename_feature(self.root, "Identifier")
         destination = ROOT / "build/adoption-evidence"
         if any(path.is_symlink() for path in [destination, *destination.parents]):
             self.fail("adoption evidence destination must not traverse symlinks")
         destination.mkdir(parents=True, exist_ok=True)
         try:
-            report = accept_local.accept(self.root, "fixture/UuidTest", tool, cross=True)
+            report = accept_local.accept(self.root, "fixture/" + repository, tool, cross=True)
         finally:
             for name in ("acceptance.json", "host-status.json", "compile-status.json",
                          "source-host-status.json", "compiled-host-status.json"):
@@ -242,21 +277,22 @@ class AdoptionTests(unittest.TestCase):
         archive = Path(report["artifact"]["path"])
         self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(), report["artifact"]["sha256"])
         with zipfile.ZipFile(archive) as packed:
-            self.assertIn(b"Copyright 2009 The Go Authors.", packed.read("UuidTest.4dbase/Resources/licenses/Go-LICENSE.txt"))
-            syntax = packed.read("UuidTest.4dbase/Resources/en.lproj/syntaxEN.json")
+            prefix = repository + ".4dbase/"
+            self.assertIn(b"Copyright 2009 The Go Authors.", packed.read(prefix + "Resources/licenses/Go-LICENSE.txt"))
+            syntax = packed.read(prefix + "Resources/en.lproj/syntaxEN.json")
             self.assertIn(b"Identifier", syntax)
-            self.assertNotIn(b"Greeting", syntax)
-            self.assertEqual(packed.getinfo("UuidTest.4dbase/Resources/bin/macOS/uuid-test").external_attr >> 16 & 0o777, 0o755)
-            self.assertIn("UuidTest.4dbase/Libraries/lib4d-arm64.dylib", packed.namelist())
-            with zipfile.ZipFile(io.BytesIO(packed.read("UuidTest.4dbase/UuidTest.4DZ"))) as project:
+            self.assertNotIn(feature.encode(), syntax)
+            self.assertEqual(packed.getinfo(prefix + "Resources/bin/macOS/" + config["cli"]).external_attr >> 16 & 0o777, 0o755)
+            self.assertIn(prefix + "Libraries/lib4d-arm64.dylib", packed.namelist())
+            with zipfile.ZipFile(io.BytesIO(packed.read(prefix + repository + ".4DZ"))) as project:
                 self.assertIn("Project/", project.namelist())
                 self.assertFalse(any(name.endswith(".4dm") for name in project.namelist()))
         shutil.copy2(archive, destination / archive.name)
         report["artifact"]["path"] = str(destination / archive.name)
         report["fixture_disposed"] = True
         report["template_commit"] = commit(ROOT)
-        report["scope"] = "local starter identity/wiring regression, not UUID feature acceptance"
-        (destination / "UuidTest.acceptance.json").write_text(json.dumps(report, indent=2) + "\n")
+        report["scope"] = "local adopted feature identity/wiring regression"
+        (destination / (repository + ".acceptance.json")).write_text(json.dumps(report, indent=2) + "\n")
 
 
 if __name__ == "__main__":

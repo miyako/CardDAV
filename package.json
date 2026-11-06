@@ -1,8 +1,8 @@
 {
-  "name": "4d-component-template",
+  "name": "CardDAV",
   "version": "0.1.0",
   "private": true,
-  "description": "Deterministic UTF-8 greeting example",
+  "description": "CardDAV address-book discovery and conditional lossless contact CRUD",
   "license": "MIT",
   "tool": {
     "platform": "macos",

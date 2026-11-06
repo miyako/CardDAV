@@ -94,8 +94,14 @@ def _success_result(result, feature=False):
         raise ValueError("host feature success result requires a value")
 
 
-def validate_status(status, contract, expect_compiled):
+def validate_status(status, contract, expect_compiled, version=None):
     """Validate reusable completion/results and fixture-owned JSON assertions."""
+    if "$VERSION" in json.dumps(contract):
+        if version is None:
+            version = _read_json(Path(__file__).resolve().parents[1] / "template.json")["version"]
+        if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+            raise ValueError("host version substitution requires configured SemVer")
+        contract = json.loads(json.dumps(contract).replace("$VERSION", version))
     if (not isinstance(status, dict) or status.get("success") is not True
             or status.get("finished") is not True
             or status.get("compiled") is not expect_compiled):
@@ -220,7 +226,8 @@ def test_4d(root, tool4d, component=None):
         staged_output = host / (_host_path_prefix("host status") + ".json")
         request.write_text(json.dumps({"status": str(staged_output),
                                       "expectCompiled": component is not None,
-                                      "executable": str(executable)}, ensure_ascii=False) + "\n",
+                                      "executable": str(executable),
+                                      "version": config["version"]}, ensure_ascii=False) + "\n",
                            encoding="utf-8")
         subprocess.run([str(Path(tool4d).resolve()), str(host / "Project" / "Host.4DProject"),
                         "--skip-onstartup", "--startup-method=Smoke", "--dataless",
@@ -230,7 +237,7 @@ def test_4d(root, tool4d, component=None):
             raise ValueError("tool4d did not write host-status.json; host execution is unverified")
         output.write_bytes(staged_output.read_bytes())
         status = _read_json(output)
-        return validate_status(status, contract, component is not None)
+        return validate_status(status, contract, component is not None, config["version"])
     finally:
         shutil.rmtree(staging)
 

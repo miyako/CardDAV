@@ -1,0 +1,14 @@
+CardDAV dependency redistribution
+
+The Go runtime and standard library are redistributed under Go-LICENSE.txt.
+
+github.com/emersion/go-vcard v0.1.0
+Upstream: https://github.com/emersion/go-vcard
+Tag commit: 3f59d540edef42a9cdc14301fae19a6f48a3aa61
+License: MIT; reproduced in go-vcard-LICENSE.txt
+Module checksum: h1:1GN6X5Rc91nvefm0ODRCEmTLVsnXK1f7++Uj0FKo+n0=
+No transitive third-party modules.
+
+The vCard dependency is used for parsing properties, groups and parameters.
+CardDAV validates its input first, supplements TEXT escaping and Unicode-safe
+line folding, and never re-encodes server/transport vCards. See Protocol.md.

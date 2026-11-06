@@ -64,7 +64,11 @@ def smoke_test(executable, version, contract, prefix=()):
                 except (UnicodeDecodeError, re.error) as error:
                     raise ValueError("invalid UTF-8 stream or contract regex: " + str(error)) from error
             return actual == expected(field)
-        result = subprocess.run([*prefix, str(executable), *case["args"]], capture_output=True, timeout=20)
+        input_text = case.get("stdin", "")
+        if not isinstance(input_text, str):
+            raise ValueError("CLI contract stdin must be Text")
+        result = subprocess.run([*prefix, str(executable), *case["args"]],
+                                input=input_text.encode("utf-8"), capture_output=True, timeout=30)
         if (result.returncode != case["exitCode"] or not stream_matches("stdout", result.stdout)
                 or not stream_matches("stderr", result.stderr)):
             raise ValueError(f"CLI contract failed: {case['args']!r}: {result!r}")
@@ -112,7 +116,7 @@ def build(root, target, language=None, cross=False):
         env.update(CGO_ENABLED="0", GOTOOLCHAIN="local",
                    GOOS="windows" if target == "windows-x64" else "darwin",
                    GOARCH="arm64" if target == "macos-arm64" else "amd64")
-        commands = [["go", "build", "-trimpath", "-o", str(executable), "."]]
+        commands = [["go", "build", "-mod=readonly", "-trimpath", "-o", str(executable), "."]]
     elif selected == "rust":
         require_toolchain("rust")
         toolchain = subprocess.run(["rustc", "--version"], check=True, capture_output=True, text=True).stdout.strip()
@@ -133,7 +137,7 @@ def build(root, target, language=None, cross=False):
         subprocess.run(command, cwd=source, env=env, check=True, timeout=600)
     if target == native:
         if selected == "go":
-            subprocess.run(["go", "test", "./..."], cwd=source, env=env, check=True, timeout=600)
+            subprocess.run(["go", "test", "-mod=readonly", "./..."], cwd=source, env=env, check=True, timeout=600)
         elif selected == "rust":
             subprocess.run(["cargo", "test", "--release", "--locked"], cwd=source, env=env, check=True, timeout=600)
         elif (output / "cmake/CTestTestfile.cmake").is_file():

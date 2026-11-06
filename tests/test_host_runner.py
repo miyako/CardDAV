@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -13,14 +14,26 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("host_runner", ROOT / "scripts/test_4d.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
-CONTRACT = json.loads((ROOT / "tests/host/contract.json").read_text(encoding="utf-8"))
+VERSION = json.loads((ROOT / "template.json").read_text())["version"]
 
 
-def valid_status(compiled=False):
+def contract_for(version=VERSION):
+    return json.loads((ROOT / "tests/host/contract.json").read_text(
+        encoding="utf-8").replace("$VERSION", version))
+
+
+CONTRACT = contract_for()
+
+
+def valid_status(compiled=False, version=VERSION):
+    contract = contract_for(version)
     status = {"success": True, "finished": True, "compiled": compiled,
-              "cases": [{"ok": True, **copy.deepcopy(case)} for case in CONTRACT["feature"]["cases"]],
+              "cases": [],
               "fileArgument": {"ok": True, "stdout": "file round trip", "stderr": "", "exitCode": 0},
               "folderArgument": {"ok": True, "stdout": "folder round trip", "stderr": "", "exitCode": 0}}
+    for path in contract["execution"]["successPaths"]:
+        status[path.removeprefix("/")] = {
+            "ok": True, "stdout": "synthetic response\n", "stderr": "", "exitCode": 0}
     def apply_assertions(value, assertions):
         for assertion in assertions:
             tokens = assertion["path"].split("/")[1:]
@@ -34,15 +47,37 @@ def valid_status(compiled=False):
             key = int(tokens[-1]) if isinstance(destination, list) else tokens[-1]
             if "equals" in assertion:
                 destination[key] = copy.deepcopy(assertion["equals"])
+            if "matches" in assertion:
+                examples = (
+                    "synthetic response\n", version,
+                    '{"protocol":1,"version":"' + version + '"}\n',
+                    '{"protocol":1,"result":{"version":"' + version + '"}}\n',
+                    "http://127.0.0.1:12345/books/default/",
+                    "http://127.0.0.1:12345/books/default/host-test.vcf",
+                    "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:host-test\r\nFN:日本語\r\n"
+                    "X-UNKNOWN;X-PARAM=preserve:opaque value\r\nEND:VCARD\r\n",
+                    "BEGIN:VCARD\r\nVERSION:4.0\r\nUID:host-test\r\nFN:Large 日本語\r\n"
+                    "X-RAW:preserve\r\n" + "X-LARGE:" + "a" * 70000 + "\r\nEND:VCARD\r\n")
+                destination[key] = next(example for example in examples
+                                        if re.fullmatch(assertion["matches"], example))
             if "length" in assertion:
                 destination[key] = [{} for _ in range(assertion["length"])]
             if "each" in assertion:
                 destination[key] = [apply_assertions(entry, assertion["each"]) for entry in destination[key]]
         return value
 
+    feature = contract["feature"]
+    if "cases" in feature:
+        status["cases"] = [{"ok": True, **copy.deepcopy(case)} for case in feature["cases"]]
+    else:
+        status["cases"] = [
+            apply_assertions({"ok": True, "stdout": "synthetic feature response\n",
+                              "stderr": "", "exitCode": 0, "value": {}},
+                             feature["caseAssertions"])
+            for _ in range(feature["caseCount"])]
     for section in ("feature", "execution"):
-        status = apply_assertions(status, CONTRACT[section]["assertions"])
-    assertions = {entry["path"]: entry for entry in CONTRACT["execution"]["assertions"]}
+        status = apply_assertions(status, contract[section]["assertions"])
+    assertions = {entry["path"]: entry for entry in contract["execution"]["assertions"]}
     rejected = assertions["/rejectedArguments"]["each"][0]["equals"]
     status["rejectedArguments"] = [{"type": i, "result": copy.deepcopy(rejected)} for i in range(9)]
     nul = assertions["/rejectedNul"]["each"][0]["equals"]
@@ -51,6 +86,16 @@ def valid_status(compiled=False):
 
 
 class ContractTests(unittest.TestCase):
+    def test_dynamic_version_contract_uses_the_configured_release(self):
+        contract = json.loads((ROOT / "tests/host/contract.json").read_text())
+        self.assertIn("$VERSION", json.dumps(contract))
+        for compiled in (False, True):
+            status = valid_status(compiled, "1.2.3")
+            runner.validate_status(status, contract, compiled, "1.2.3")
+            for wrong in ("0.1.0", "v1.2.3", True):
+                with self.subTest(compiled=compiled, version=wrong), self.assertRaises(ValueError):
+                    runner.validate_status(status, contract, compiled, wrong)
+
     def test_semantic_nondeterministic_cases_require_real_values_and_patterns(self):
         contract = {"schema": 1, "feature": {
             "casesPath": "/cases", "caseCount": 1,
@@ -164,19 +209,20 @@ class ContractTests(unittest.TestCase):
                 runner.validate_status(status, CONTRACT, False)
 
     def test_malformed_boolean_protocol_results_require_error_and_retained_status(self):
-        for index in range(2):
+        for index in range(len(valid_status()["protocolInvalid"])):
             for key in ("ok", "stdout", "stderr", "exitCode", "error"):
                 status = valid_status()
-                del status["protocolTypes"][index][key]
+                del status["protocolInvalid"][index][key]
                 with self.subTest(index=index, key=key), self.assertRaises(ValueError):
                     runner.validate_status(status, CONTRACT, False)
             status = valid_status()
-            status["protocolTypes"][index]["value"] = {"protocol": True}
+            status["protocolInvalid"][index]["value"] = {"protocol": True}
             with self.assertRaises(ValueError):
                 runner.validate_status(status, CONTRACT, False)
 
     def test_malformed_null_and_scalar_payloads_cannot_be_success_shaped(self):
-        for path in ("/protocolNull", *(f"/protocolScalars/{index}" for index in range(5))):
+        for path in (*(f"/protocolInvalid/{index}" for index in range(12)),
+                     *(f"/operationInvalid/{index}" for index in range(9))):
             status = valid_status()
             runner._pointer(status, path)["ok"] = True
             with self.subTest(path=path), self.assertRaises(ValueError):
@@ -184,11 +230,15 @@ class ContractTests(unittest.TestCase):
 
     def test_execution_successes_preserve_streams_without_feature_value(self):
         status = valid_status()
-        status["fileArgument"]["stderr"] = "diagnostic, not a failure"
-        runner.validate_status(status, CONTRACT, False)
-        status["folderArgument"]["error"] = {"code": "hidden_failure"}
+        contract = copy.deepcopy(CONTRACT)
+        contract["execution"]["successPaths"].append("/genericExecution")
+        status["genericExecution"] = {
+            "ok": True, "stdout": "file round trip\n",
+            "stderr": "diagnostic, not a failure", "exitCode": 0}
+        runner.validate_status(status, contract, False)
+        status["genericExecution"]["error"] = {"code": "hidden_failure"}
         with self.assertRaises(ValueError):
-            runner.validate_status(status, CONTRACT, False)
+            runner.validate_status(status, contract, False)
 
     def test_new_feature_contract_without_greeting_or_six_cases(self):
         contract = copy.deepcopy(CONTRACT)
@@ -210,7 +260,8 @@ class ContractTests(unittest.TestCase):
                 lambda c: c["feature"].update(cases=[]),
                 lambda c: c["feature"].update(assertions=[]),
                 lambda c: c["execution"].update(assertions=[]),
-                lambda c: c["feature"]["cases"][0].pop("value"),
+                lambda c: (c["feature"]["cases"][0].pop("value")
+                           if "cases" in c["feature"] else c["feature"].update(caseAssertions=[])),
                 lambda c: c["execution"].update(successPaths=None),
                 lambda c: c["execution"]["assertions"].append({"path": "/success", "equal": True})):
             contract = copy.deepcopy(CONTRACT)
@@ -232,6 +283,7 @@ class HostRunnerTests(unittest.TestCase):
         self.addCleanup(lambda: shutil.rmtree(self.root))
         config = json.loads((ROOT / "template.json").read_text())
         config["initialized"] = True
+        config["version"] = getattr(self, "version", config["version"])
         self.config = config
         (self.root / "template.json").write_text(json.dumps(config), encoding="utf-8")
         shutil.copytree(ROOT / "tests/host", self.root / "tests/host")
@@ -271,6 +323,7 @@ class HostRunnerTests(unittest.TestCase):
             self.assertIn('"', host.parent.name)
         self.assertFalse((host / "environment4d.json").exists())
         request = json.loads(request_path.read_text(encoding="utf-8"))
+        self.assertEqual(request["version"], self.config["version"])
         self.assertEqual(Path(request["executable"]).parent, host)
         self.assertEqual(Path(request["executable"]).read_bytes(), b"unit test native resource")
         self.assertEqual(Path(request["status"]).parent, host)
@@ -279,7 +332,7 @@ class HostRunnerTests(unittest.TestCase):
         if not request["expectCompiled"]:
             self.assertFalse((host / "Components" / (self.config["repository"] + ".4dbase") /
                               "Project/DerivedData").exists())
-        Path(request["status"]).write_text(json.dumps(valid_status(request["expectCompiled"])),
+        Path(request["status"]).write_text(json.dumps(valid_status(request["expectCompiled"], self.config["version"])),
                                           encoding="utf-8")
 
     def run_host(self, component=None):

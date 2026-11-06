@@ -13,17 +13,68 @@ initializer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(initializer)
 
 
+def template_fixture(root):
+    """Build a minimal fresh template only inside a disposable test checkout."""
+    config = json.loads((ROOT / "template.json").read_text())
+    component = root / "component/4d-component-template"
+    files = {
+        "template.json": json.dumps({
+            "schema": 1, "initialized": False, "repository": "4d-component-template",
+            "namespace": "TemplateCLI", "cli": "component-cli", "language": None,
+            "feature": "Greeting fixture", "version": config["version"]}),
+        "README.md": "cs.TemplateCLI.Greeting\ncomponent/4d-component-template/\n",
+        "tests/host/Project/Sources/Methods/Smoke.4dm":
+            "var $feature : cs.TemplateCLI.Greeting\n",
+        "tests/host/Project/Sources/dependencies.json":
+            '{"dependencies":{"4d-component-template":{}}}\n',
+        "tests/host/environment4d.json": "{}\n",
+        "component/4d-component-template/Project/4d-component-template.4DProject": "{}\n",
+        "component/4d-component-template/Project/Sources/settings.4DSettings":
+            '<preferences><com.4d><general component_classStore_name="TemplateCLI"/>'
+            '</com.4d></preferences>\n',
+        "component/4d-component-template/Project/Sources/catalog.4DCatalog":
+            '<base name="4d-component-template" uuid="ABCDEF"/>\n',
+        "component/4d-component-template/Project/Sources/Classes/Greeting.4dm":
+            "// A synthetic class for identity/rename validation.\n",
+        "component/4d-component-template/Project/Sources/Classes/_Process.4dm":
+            "// Independent generic process fixture.\n",
+        "component/4d-component-template/Documentation/Classes/Greeting.md":
+            "# Greeting\ncs.TemplateCLI.Greeting\n",
+        "component/4d-component-template/Resources/en.lproj/syntaxEN.json":
+            '{"classes":["Greeting"]}\n',
+        "cli-starters/go/go.mod": "module component-cli\n\ngo 1.23\n",
+        "cli-starters/go/main.go": 'package main\nfunc main() {}\n',
+        "cli-starters/rust/Cargo.toml":
+            '[package]\nname = "component-cli"\nversion = "' + config["version"] + '"\n',
+        "cli-starters/rust/src/main.rs": "fn main() {}\n",
+        "cli-starters/cpp/CMakeLists.txt":
+            "cmake_minimum_required(VERSION 3.16)\nproject(component-cli LANGUAGES CXX)\n",
+        "cli-starters/cpp/main.cpp": "int main() { return 0; }\n",
+        "cli-starters/rust/licenses/Rust-LICENSE-MIT.txt": "Synthetic runtime notice\n",
+    }
+    for relative, content in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    for name in ("package.json", "release-policy.json", "LICENSE", "AGENTS.md", ".gitattributes"):
+        shutil.copy2(ROOT / name, root / name)
+    package = json.loads((root / "package.json").read_text())
+    package["name"] = "4d-component-template"
+    (root / "package.json").write_text(json.dumps(package))
+    resources = ROOT / "component" / config["repository"] / "Resources"
+    for name in ("logo.png", "logo.svg"):
+        shutil.copy2(resources / name, component / "Resources" / name)
+    licenses = root / "cli-starters/go/licenses"
+    licenses.mkdir()
+    shutil.copy2(resources / "licenses/Go-LICENSE.txt", licenses / "Go-LICENSE.txt")
+
+
 class InitializerTests(unittest.TestCase):
     def setUp(self):
-        if json.loads((ROOT / "template.json").read_text())["initialized"]:
-            self.skipTest("fresh-template initializer tests require retained cli-starters/")
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(prefix=".initializer-test-", dir=ROOT)
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        for name in ("component", "cli-starters", "tests/host"):
-            shutil.copytree(ROOT / name, self.root / name)
-        for name in ("template.json", "package.json", "README.md", "release-policy.json"):
-            shutil.copy2(ROOT / name, self.root / name)
+        template_fixture(self.root)
 
     def configure(self, language="go", **changes):
         args = dict(repository="hello-tools", namespace="AcmeHello", cli="hello-cli",
@@ -35,7 +86,7 @@ class InitializerTests(unittest.TestCase):
         for language in ("go", "rust", "cpp"):
             with self.subTest(language=language):
                 # Each language starts with an untouched template.
-                temporary = tempfile.TemporaryDirectory()
+                temporary = tempfile.TemporaryDirectory(prefix=".initializer-language-", dir=ROOT)
                 self.addCleanup(temporary.cleanup)
                 destination = Path(temporary.name) / "checkout"
                 shutil.copytree(self.root, destination)

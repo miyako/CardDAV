@@ -18,9 +18,12 @@ import test_delivery
 class HostedAcceptanceTests(unittest.TestCase):
     def setUp(self):
         self.fixture = test_delivery.DeliveryTests("test_matrix_only_selected_language")
+        if hasattr(self, "version"):
+            self.fixture.version = self.version
         self.fixture.setUp()
         self.addCleanup(self.fixture.doCleanups)
         self.root = self.fixture.root
+        self.version = self.fixture.config["version"]
         self.tool = self.root / "tool4d"
         self.tool.write_bytes(b"synthetic tool identity")
         for target in accept_hosted.TARGETS:
@@ -35,7 +38,7 @@ class HostedAcceptanceTests(unittest.TestCase):
         self.host_calls.append(component is not None)
         return {"success": True, "finished": True, "compiled": component is not None}
 
-    def accept(self, signed=False, subprocess_run=None, tag="0.1.0"):
+    def accept(self, signed=False, subprocess_run=None, tag=None):
         with patch.object(accept_hosted, "require_tool4d_host"), patch.object(
                 accept_hosted, "assemble"), patch.object(
                 accept_hosted, "compile_component", return_value=self.fixture.status), patch.object(
@@ -69,7 +72,7 @@ class HostedAcceptanceTests(unittest.TestCase):
 
     def test_prefixed_tag_is_rejected_before_host_or_package_acceptance(self):
         with self.assertRaisesRegex(ValueError, "without a v prefix"):
-            self.accept(tag="v0.1.0")
+            self.accept(tag="v" + self.version)
         self.assertEqual(self.host_calls, [])
         self.assertFalse((self.root / "dist/example-component.acceptance.json").exists())
 
@@ -155,7 +158,7 @@ class HostedAcceptanceTests(unittest.TestCase):
                 unsigned = json.loads((self.root / "build/hosted-acceptance.json").read_text())[
                     "unsigned_artifact"]
                 proof = {
-                    "schema": 1, "version": "0.1.0", "sourceSHA": "a" * 40, "releaseTag": "0.1.0",
+                    "schema": 1, "version": self.version, "sourceSHA": "a" * 40, "releaseTag": self.version,
                     "unsignedCompileInputSHA256": self.fixture.status["input_sha256"],
                     "unsignedZIPHashSHA256": unsigned["sha256"],
                     "hostValidation": "required-after-signing",

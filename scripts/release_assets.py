@@ -79,8 +79,8 @@ def verify_assets(root, repository, tag, revision, apple_signing=False):
         return step.get("details")
 
     contract = _read_json(root / "tests/host/contract.json")
-    validate_status(passed("source_host"), contract, False)
-    validate_status(passed("compiled_host"), contract, True)
+    validate_status(passed("source_host"), contract, False, config["version"])
+    validate_status(passed("compiled_host"), contract, True, config["version"])
     for name in ("assembly", "package"):
         passed(name)
     compiled = passed("compile")
@@ -103,7 +103,7 @@ def verify_assets(root, repository, tag, revision, apple_signing=False):
     if apple_signing:
         passed("signing")
         passed("signing_proof")
-        validate_status(passed("unsigned_compiled_host"), contract, True)
+        validate_status(passed("unsigned_compiled_host"), contract, True, config["version"])
         expected += ["dist/" + name + ".dmg", "dist/" + name + "-signing.json"]
     elif not isinstance(steps.get("signing"), dict) or steps["signing"].get("status") != "not_run":
         raise ValueError("unsigned publication must not conceal signing evidence")

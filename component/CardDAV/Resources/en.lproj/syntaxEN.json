@@ -1,0 +1,307 @@
+{
+	"_method_": {},
+	"cs.CardDAV": {
+		"_CLI": {
+			"new()": {
+				"Syntax": "**.new**( *executableName* : Text; *target* : Text )",
+				"Params": [
+					[
+						"executableName",
+						"Text",
+						"->"
+					],
+					[
+						"target",
+						"Text",
+						"->"
+					]
+				],
+				"Summary": ""
+			}
+		},
+		"Client": {
+			"new()": {
+				"Syntax": "**.new**( *target* : Text; *credentials* : Object )",
+				"Params": [
+					[
+						"target",
+						"Text",
+						"->"
+					],
+					[
+						"credentials",
+						"Object",
+						"->"
+					]
+				],
+				"Summary": ""
+			}
+		}
+	},
+	"_CLI": {
+		"execute()": {
+			"Syntax": "**.execute**( *arguments* : Collection; *input* : Text )->result : Object",
+			"Params": [
+				[
+					"arguments",
+					"Collection",
+					"->"
+				],
+				[
+					"input",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"get compiled()": {
+			"Syntax": "**.get compiled**()->compiled : Boolean",
+			"Params": [
+				[
+					"compiled",
+					"Boolean",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"target": {
+			"Syntax": "target : Text"
+		},
+		"executableName": {
+			"Syntax": "executableName : Text"
+		}
+	},
+	"_Process": {
+		"execute()": {
+			"Syntax": "**.execute**( *file* : 4D.File; *arguments* : Collection; *input* : Text )->result : Object",
+			"Params": [
+				[
+					"file",
+					"4D.File",
+					"->"
+				],
+				[
+					"arguments",
+					"Collection",
+					"->"
+				],
+				[
+					"input",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"quote()": {
+			"Syntax": "**.quote**( *argument* : Text )->quoted : Text",
+			"Params": [
+				[
+					"argument",
+					"Text",
+					"->"
+				],
+				[
+					"quoted",
+					"Text",
+					"<-"
+				]
+			],
+			"Summary": ""
+		}
+	},
+	"Client": {
+		"parse()": {
+			"Syntax": "**.parse**( *vcard* : Text )->result : Object",
+			"Params": [
+				[
+					"vcard",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"build()": {
+			"Syntax": "**.build**( *contact* : Object; *version* : Text )->result : Object",
+			"Params": [
+				[
+					"contact",
+					"Object",
+					"->"
+				],
+				[
+					"version",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"get()": {
+			"Syntax": "**.get**( *url* : Text )->result : Object",
+			"Params": [
+				[
+					"url",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"request()": {
+			"Syntax": "**.request**( *request* : Object )->result : Object",
+			"Params": [
+				[
+					"request",
+					"Object",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"version()": {
+			"Syntax": "**.version**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"delete()": {
+			"Syntax": "**.delete**( *url* : Text; *etag* : Text )->result : Object",
+			"Params": [
+				[
+					"url",
+					"Text",
+					"->"
+				],
+				[
+					"etag",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"create()": {
+			"Syntax": "**.create**( *url* : Text; *vcard* : Text )->result : Object",
+			"Params": [
+				[
+					"url",
+					"Text",
+					"->"
+				],
+				[
+					"vcard",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"update()": {
+			"Syntax": "**.update**( *url* : Text; *vcard* : Text; *etag* : Text )->result : Object",
+			"Params": [
+				[
+					"url",
+					"Text",
+					"->"
+				],
+				[
+					"vcard",
+					"Text",
+					"->"
+				],
+				[
+					"etag",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"query()": {
+			"Syntax": "**.query**( *bookURL* : Text; *options* : Object )->result : Object",
+			"Params": [
+				[
+					"bookURL",
+					"Text",
+					"->"
+				],
+				[
+					"options",
+					"Object",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"discover()": {
+			"Syntax": "**.discover**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		}
+	}
+}

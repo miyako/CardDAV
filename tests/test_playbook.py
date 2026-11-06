@@ -45,13 +45,20 @@ class PlaybookTests(unittest.TestCase):
 
     def test_release_guides_distinguish_prefix_free_semver_from_follow4d(self):
         reference = "https://blog.4d.com/follow-4d-version-a-smarter-way-to-manage-your-dependencies/"
-        for source in (ROOT / "AGENTS.md", ROOT / "README.md", SKILL):
+        for source in (ROOT / "AGENTS.md", SKILL):
             text = source.read_text(encoding="utf-8")
             with self.subTest(source=source.relative_to(ROOT)):
                 for required in ("prefix-free", "v0.1.0", "20.2.3", "20R3.2", reference):
                     self.assertIn(required, text)
                 self.assertNotIn("--tag v0.1.0", text)
-        self.assertIn('"tag": "0.1.0"', (ROOT / "README.md").read_text())
+        readme = (ROOT / "README.md").read_text()
+        self.assertRegex(readme, r"(?:prefix-free|bare SemVer)")
+        self.assertIn("never `v0.1.0`", readme)
+        self.assertIn("Ordinary SemVer does not claim 4D Follow4D", readme)
+        self.assertNotIn("--tag v0.1.0", readme)
+        config = json.loads((ROOT / "template.json").read_text())
+        self.assertIn(config["cli"] + " --version", readme)
+        self.assertIn('{"protocol":1,"version":"' + config["version"] + '"}', readme)
 
 
 if __name__ == "__main__":

@@ -177,20 +177,28 @@ def plan(root, version, repository=None):
     feature_path = component / "Project/Sources/Classes" / (feature + ".4dm")
     # Adopted features sometimes expose a component version on the constructor.
     literal(feature_path, r'(?i:\bThis\.(?:componentVersion|cliVersion|version)\s*:=\s*")(?P<version>[^"\r\n]*)"')
-    literal("tests/host/Project/Sources/Methods/Smoke.4dm",
-            r'\.value\.version\s*[#=]\s*"(?P<version>[^"\r\n]+)"', required=True)
+    smoke = "tests/host/Project/Sources/Methods/Smoke.4dm"
+    smoke_text = read(smoke)
+    count = literal(smoke, r'\.value\.version\s*[#=]\s*"(?P<version>[^"\r\n]+)"')
+    if not count and not re.search(r"\.value\.version\s*[#=]\s*\$request\.version\b", smoke_text):
+        raise ValueError(f"missing supported component version surface: {smoke}")
     literal("README.md", r"^\|[^\n]*`" + re.escape(config["cli"])
             + r" --version`[^\n]*" + protocol, required=True)
     literal(component / "Documentation/Classes" / (feature + ".md"), protocol, required=True)
-    # The independent Python CLI test also contains a literal --version response.
-    literal("tests/test_cli.py", protocol, required=True)
+    literal(component / "Documentation/Protocol.md", protocol, required=True)
+    # CLI suites may assert a literal response or read the configured version.
+    cli_test = "tests/test_cli.py"
+    count = literal(cli_test, protocol)
+    if not count and not re.search(
+            r'(?m)^\s*cls\.version\s*=\s*config\["version"\]\s*$', read(cli_test)):
+        raise ValueError(f"missing supported component version surface: {cli_test}")
 
     def payload(value, *, placeholder=False):
         if isinstance(value, dict) and "version" in value and type(value.get("protocol")) is int and value["protocol"] == 1:
             if value["version"] == "$VERSION":
                 if placeholder:
                     return value
-                raise ValueError("host version assertions must contain the concrete version")
+                raise ValueError("version assertions must contain the concrete version or $VERSION")
             if value["version"] != old:
                 raise ValueError("inconsistent protocol version response in contract")
             return dict(value, version=version)
@@ -225,13 +233,13 @@ def plan(root, version, repository=None):
                             raise ValueError("version host assertions must use exact equals")
                         value = assertion["equals"]
                         if path.endswith("/value/version"):
-                            if value != old:
+                            if value not in (old, "$VERSION"):
                                 raise ValueError("inconsistent host version assertion")
-                            assertion["equals"] = version
+                            assertion["equals"] = "$VERSION" if value == "$VERSION" else version
                         elif path == "/renamedExecutable":
-                            assertion["equals"] = dict(value, stdout=payload(value["stdout"]))
+                            assertion["equals"] = dict(value, stdout=payload(value["stdout"], placeholder=True))
                         else:
-                            assertion["equals"] = payload(value)
+                            assertion["equals"] = payload(value, placeholder=True)
                         seen += 1
         else:
             for case in contract["cases"]:

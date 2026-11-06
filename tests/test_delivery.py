@@ -52,7 +52,8 @@ class DeliveryTests(unittest.TestCase):
         self.config = {
             "schema": 1, "initialized": True, "repository": "example-component",
             "namespace": "Example", "cli": "example-cli", "language": "go",
-            "feature": "greeting", "version": "0.1.0",
+            "feature": "synthetic delivery fixture",
+            "version": getattr(self, "version", json.loads((ROOT / "template.json").read_text())["version"]),
         }
         self.write_config()
         self.component = self.root / "component" / self.config["repository"]
@@ -124,14 +125,14 @@ class DeliveryTests(unittest.TestCase):
 
     def package(self, **options):
         return package_component.package(
-            self.root, repository="owner/example-component", tag="0.1.0", **options)
+            self.root, repository="owner/example-component", tag=self.config["version"], **options)
 
     def test_uninitialized_fails_and_has_no_native_jobs(self):
         self.config.update(initialized=False, repository="4d-component-template", language=None)
         self.write_config()
         self.assertEqual(ci_config.matrix(ci_config.load_config(self.root)), {"include": []})
         with self.assertRaisesRegex(ValueError, "initialize"):
-            package_component.package(self.root, repository="owner/4d-component-template", tag="0.1.0")
+            package_component.package(self.root, repository="owner/4d-component-template", tag=self.config["version"])
 
     def test_matrix_only_selected_language(self):
         for language in ("go", "rust", "cpp"):
@@ -180,7 +181,7 @@ class DeliveryTests(unittest.TestCase):
 
     def test_wrong_repository(self):
         with self.assertRaisesRegex(ValueError, "actual repository"):
-            package_component.package(self.root, repository="owner/wrong", tag="0.1.0")
+            package_component.package(self.root, repository="owner/wrong", tag=self.config["version"])
 
     def test_wrong_package_name(self):
         (self.root / "package.json").write_text('{"name":"wrong"}', encoding="utf-8")
@@ -224,7 +225,8 @@ class DeliveryTests(unittest.TestCase):
             self.write_config()
 
     def test_bad_tag_or_semver(self):
-        for tag in ("v0.1.0", "0.2.0", "0.1.0/../../escape", "20R3.2"):
+        version = self.config["version"]
+        for tag in ("v" + version, "999999.0.0", version + "/../../escape", "20R3.2"):
             with self.subTest(tag=tag), self.assertRaisesRegex(ValueError, "tag"):
                 package_component.package(self.root, repository="owner/example-component", tag=tag)
         for version in ("01.1.0", "0.1", "0.1.0-01", "0.1.0\n", "0.1.0/escape"):
@@ -446,7 +448,7 @@ class DeliveryTests(unittest.TestCase):
 
     def test_release_requires_opt_in(self):
         environment = {
-            "GITHUB_REPOSITORY": "owner/example-component", "GITHUB_REF_NAME": "0.1.0",
+            "GITHUB_REPOSITORY": "owner/example-component", "GITHUB_REF_NAME": self.config["version"],
             "FOURD_ENABLED": "false",
         }
         with patch.dict(os.environ, environment, clear=True), patch.object(
@@ -459,7 +461,7 @@ class DeliveryTests(unittest.TestCase):
         environment = {"GITHUB_REPOSITORY": "owner/example-component",
                        "GITHUB_REF_NAME": "main", "FOURD_ENABLED": "true"}
         with patch.dict(os.environ, environment, clear=True), patch.object(
-                sys, "argv", ["ci_config.py", "validate", "--release", "--tag", "0.1.0",
+                sys, "argv", ["ci_config.py", "validate", "--release", "--tag", self.config["version"],
                               "--root", str(self.root)]):
             ci_config.main()
 

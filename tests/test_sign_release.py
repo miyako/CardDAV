@@ -124,9 +124,12 @@ class FakeTools:
 class SigningTests(unittest.TestCase):
     def setUp(self):
         fixture = delivery.DeliveryTests("test_matrix_only_selected_language")
+        if hasattr(self, "version"):
+            fixture.version = self.version
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         self.root = fixture.root
+        self.version = fixture.config["version"]
         old = fixture.component
         component = old.with_name("UuidTest")
         old.rename(component)
@@ -146,9 +149,9 @@ class SigningTests(unittest.TestCase):
         fixture.write_status()
         self.fixture = fixture
         self.policy = self.root / "release-policy.json"
-        self.policy.write_text('{"schema":1,"apple_notarized_versions":["0.1.0"]}')
+        self.policy.write_text(json.dumps({"schema": 1, "apple_notarized_versions": [self.version]}))
         self.unsigned = package_component.package(
-            self.root, repository="miyako/UuidTest", tag="0.1.0")
+            self.root, repository="miyako/UuidTest", tag=self.version)
         self.original_zip = self.unsigned.read_bytes()
         self.source_snapshot = signing.snapshot(component)
         self.env = {
@@ -158,7 +161,7 @@ class SigningTests(unittest.TestCase):
         self.env["APPLE_DEVELOPER_ID_CERTIFICATE"] = base64.b64encode(
             b"synthetic not-a-real-p12").decode()
         self.env.update(GITHUB_ACTIONS="true", GITHUB_REPOSITORY="miyako/UuidTest",
-                        GITHUB_REF_NAME="0.1.0", GITHUB_SHA="a" * 40)
+                        GITHUB_REF_NAME=self.version, GITHUB_SHA="a" * 40)
         self.secrets = {name: self.env[name] for name in signing.SECRET_NAMES}
         self.tools = FakeTools(self.secrets)
 
@@ -181,7 +184,7 @@ class SigningTests(unittest.TestCase):
 
     def test_policy_absent_unsigned_current_opt_in_and_other_version(self):
         output = self.root / "github-output"
-        for policy, expected in ((None, False), (["0.1.0"], True), (["0.2.0"], False)):
+        for policy, expected in ((None, False), ([self.version], True), (["999999.0.0"], False)):
             if policy is None:
                 self.policy.unlink()
             else:
@@ -215,7 +218,7 @@ class SigningTests(unittest.TestCase):
         self.assertEqual(output.read_text(), "apple_signing=true\n")
         proof = self.sign(require_apple_signing=True)
         self.assertEqual(proof["notarization"]["status"], "Accepted")
-        self.policy.write_text('{"schema":1,"apple_notarized_versions":["0.1.0"]}')
+        self.policy.write_text(json.dumps({"schema": 1, "apple_notarized_versions": [self.version]}))
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertTrue(signing.policy_command(self.root, {}, require_apple_signing=False))
         self.policy.write_text("malformed")
@@ -224,14 +227,14 @@ class SigningTests(unittest.TestCase):
 
     def test_manual_release_identity_overrides_workflow_branch_and_checks_head(self):
         self.env.update(GITHUB_REF_NAME="main", GITHUB_SHA="b" * 40,
-                        RELEASE_TAG="0.1.0", RELEASE_SHA="a" * 40)
+                        RELEASE_TAG=self.version, RELEASE_SHA="a" * 40)
         proof = self.sign(require_apple_signing=True)
         self.assertEqual(proof["sourceSHA"], "a" * 40)
-        self.assertEqual(proof["releaseTag"], "0.1.0")
+        self.assertEqual(proof["releaseTag"], self.version)
         self.assertEqual(self.tools.calls[0], [signing.GIT, "rev-parse", "HEAD"])
 
     def test_resolved_source_commit_mismatch_fails_before_keychain_use(self):
-        self.env.update(RELEASE_TAG="0.1.0", RELEASE_SHA="b" * 40)
+        self.env.update(RELEASE_TAG=self.version, RELEASE_SHA="b" * 40)
         with self.assertRaisesRegex(ValueError, "source HEAD does not match"):
             self.sign(require_apple_signing=True)
         self.assertEqual(self.tools.calls, [[signing.GIT, "rev-parse", "HEAD"]])
@@ -252,7 +255,7 @@ class SigningTests(unittest.TestCase):
                                  ({"GITHUB_REPOSITORY": ""}, "actual"),
                                  ({"GITHUB_REPOSITORY": "miyako/Wrong"}, "actual repository"),
                                  ({"GITHUB_REF_NAME": "main"}, "release tag"),
-                                 ({"GITHUB_REF_NAME": "v0.1.0"}, "release tag"),
+                                 ({"GITHUB_REF_NAME": "v" + self.version}, "release tag"),
                                  ({"GITHUB_SHA": ""}, "source commit")):
             with self.subTest(updates=updates), patch.dict(self.env, updates), \
                     self.assertRaisesRegex(ValueError, message):
